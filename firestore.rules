@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to get user data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || getUserData().role == 'government');
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Issues collection
+    match /issues/{issueId} {
+      // Citizens can create issues
+      allow create: if request.auth != null && getUserData().role == 'citizen';
+      
+      // Government can read all issues, Citizens can only read their own
+      allow read: if request.auth != null && (
+        getUserData().role == 'government' || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Government can update any issue (e.g., status), Citizens can update their own
+      allow update: if request.auth != null && (
+        getUserData().role == 'government' ||
+        (getUserData().role == 'citizen' && resource.data.userId == request.auth.uid)
+      );
+      
+      allow delete: if false;
+    }
+  }
+}
